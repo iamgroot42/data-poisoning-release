@@ -9,13 +9,9 @@ import scipy.sparse as sparse
 import scipy.io as sio
 import IPython
 
-# Local running
-DATA_FOLDER = '/afs/cs.stanford.edu/u/jsteinhardt/data-poisoning-scratch/data'
-OUTPUT_FOLDER = '/afs/cs.stanford.edu/u/jsteinhardt/data-poisoning-scratch'
-
 # Codalab
-# DATA_FOLDER = './data'
-# OUTPUT_FOLDER = '.'
+DATA_FOLDER = './data'
+OUTPUT_FOLDER = './outputs'
 
 # WEB_FOLDER = '/afs/cs.stanford.edu/u/jsteinhardt/www/reports'
 
@@ -270,8 +266,9 @@ def load_dataset(dataset_name):
     elif dataset_name == 'dogfish':
         return load_dogfish()
     else:
-        dataset_path = os.path.join(DATA_FOLDER)
-        f = np.load(os.path.join(dataset_path, '%s_train_test.npz' % dataset_name))
+
+        dataset_path = os.path.join("../../files/data/mnist_17_train_test.npz")
+        f = np.load(dataset_path)
 
         X_train = f['X_train']
         Y_train = f['Y_train'].reshape(-1)
@@ -294,7 +291,7 @@ def load_attack(dataset_name, file_name):
     elif ext == '.npz':
         return load_attack_npz(dataset_name, file_name)    
     else:
-        raise ValueError, 'File extension must be .mat or .npz.'
+        raise ValueError('File extension must be .mat or .npz.')
 
 
 def load_attack_mat(dataset_name, file_name, take_path=False):

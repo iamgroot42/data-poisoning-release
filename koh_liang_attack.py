@@ -4,32 +4,25 @@ from __future__ import absolute_import
 from __future__ import unicode_literals  
 
 import os
-import sys
 import argparse
 
 import numpy as np
-import pandas as pd
-from sklearn import linear_model, preprocessing, cluster
-import matplotlib.pyplot as plt
-import seaborn as sns
-import scipy.linalg as slin
-import scipy.sparse.linalg as sparselin
 import scipy.sparse as sparse
-from scipy.stats import pearsonr
 
 import datasets
 import data_utils as data
 
 import tensorflow as tf
-from influence.influence.smooth_hinge import SmoothHinge
+from influence.smooth_hinge import SmoothHinge
 
-from influence.influence.dataset import DataSet
+from influence.dataset import DataSet
 from tensorflow.contrib.learn.python.learn.datasets import base
 import iterative_attack
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('dataset_name', help='One of: imdb, enron, dogfish, mnist_17')
+parser.add_argument('--dataset_name', default='mnist_17', help='One of: imdb, enron, dogfish, mnist_17')
+parser.add_argument('--reps', type=int, default=1)
 parser.add_argument('--shard', type=int)
 
 args = parser.parse_args()
@@ -53,7 +46,6 @@ data_sets = base.Datasets(train=train, validation=validation, test=test)
 
 temp = 0
 input_dim = X_train.shape[1]
-weight_decay = 0.01
 
 if X_train.shape[0] % 100 == 0:
     batch_size = 100
@@ -73,30 +65,17 @@ label_flip = True
 
 output_root = os.path.join(datasets.OUTPUT_FOLDER, 'influence_data')
 
-standard_bounds_path = datasets.get_bounds_path(dataset_name, norm_sq_constraint)
+epsilons = [0, 0.05, 0.15, 0.3]
 
-standard_f = np.load(standard_bounds_path)
-
-epsilons = standard_f['epsilons']
-lower_weight_decays = standard_f['lower_weight_decays']
-
-assert np.all(datasets.DATASET_EPSILONS[dataset_name] == epsilons)
 assert epsilons[0] == 0
-assert len(epsilons) == 9
 if shard == 0:
-    target_epsilons = epsilons[1:3]
+    target_epsilons = epsilons[1:2]
 elif shard == 1:
-    target_epsilons = epsilons[3:5]
+    target_epsilons = epsilons[2:3]
 elif shard == 2:
-    target_epsilons = epsilons[5:6]
-elif shard == 3:
-    target_epsilons = epsilons[6:7]
-elif shard == 4:
-    target_epsilons = epsilons[7:8]
-elif shard == 5:
-    target_epsilons = epsilons[8:9]
+    target_epsilons = epsilons[3:4]
 else:
-    raise ValueError, 'shard must be 0-5'    
+    raise ValueError('shard must be 0-2')
 
 for random_seed in [1]:
     for epsilon_idx, epsilon in enumerate(epsilons):
@@ -108,7 +87,7 @@ for random_seed in [1]:
         num_pos_copies = int(total_copies / 2)
         num_neg_copies = total_copies - num_pos_copies
 
-        weight_decay = lower_weight_decays[epsilon_idx]
+        weight_decay = 0.09
 
         tf.reset_default_graph()
 
@@ -148,13 +127,10 @@ for random_seed in [1]:
         model.update_train_x_y(X_modified, Y_modified)
         model.train()
 
-        projection_fn = data.get_projection_fn(
-            X_train, Y_train,
-            sphere=project_sphere,
-            slab=project_slab,
-            percentile=70)
+        def projection_fn(X, Y):
+            return np.clip(X, 0, 1)
 
-        iterative_attack.iterative_attack(
+        poison_data_all = iterative_attack.iterative_attack(
             model, 
             indices_to_poison=np.arange(X_train.shape[0], X_modified.shape[0]),            
             test_idx=None, 
@@ -164,3 +140,5 @@ for random_seed in [1]:
             loss_type='normal_loss',
             projection_fn=projection_fn,
             output_root=output_root)
+
+        np.savez("saved_data/%.2f" % epsilon, X=poison_data_all, Y=Y_modified)
